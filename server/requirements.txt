@@ -4,7 +4,8 @@ torchaudio>=2.1.0
 accelerate>=0.30.0
 
 # Pipeline Orchestration (includes whisper and ollama integrations)
-pipecat-ai[whisper,ollama,websocket]>=0.0.52
+pipecat-ai[whisper,websocket]>=0.0.52
+ollama>=0.4.0
 websockets>=12.0
 
 # Text-to-Speech — Orpheus (community package with OrpheusModel)
