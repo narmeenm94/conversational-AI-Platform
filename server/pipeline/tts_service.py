@@ -58,23 +58,13 @@ class OrpheusTTSService(TTSService):
         logger.info("Orpheus TTS model loaded.")
 
     def _load_model(self):
-        """Load OrpheusModel, preferring vllm backend for speed."""
-        from orpheus_tts import OrpheusModel
+        """Load OrpheusModel with transformers backend.
 
-        resolved = self._MODEL_NAME_MAP.get(self._model_name, self._model_name)
-
-        try:
-            logger.info("Attempting to load TTS with vllm backend...")
-            model = OrpheusModel(model_name=resolved)
-            logger.info("TTS loaded with engine: %s", getattr(model, 'engine', 'unknown'))
-            return model
-        except Exception as e:
-            logger.warning("vllm init failed (%s), falling back to transformers...", e)
-
-        return self._load_transformers_fallback(resolved)
-
-    def _load_transformers_fallback(self, resolved: str):
-        """Manual construction with transformers backend as fallback."""
+        We intentionally skip vllm: it pre-allocates all remaining GPU memory,
+        starving Ollama (LLM) and causing EngineDeadError on generation.
+        Transformers + streaming gives good perceived latency without the
+        memory conflict.
+        """
         from orpheus_tts import OrpheusModel
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
