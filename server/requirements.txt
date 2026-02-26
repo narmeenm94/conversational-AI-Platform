@@ -8,7 +8,13 @@ pipecat-ai[whisper,websocket]>=0.0.52
 ollama>=0.4.0
 websockets>=12.0
 
-# Text-to-Speech — Orpheus (community package with OrpheusModel)
+# Text-to-Speech — Orpheus via vllm + SNAC
+# vllm runs as a separate server process (started by start_cloud.sh)
+# SNAC decodes vllm token output into audio
+snac>=1.0.0
+openai>=1.0.0
+
+# Text-to-Speech — Orpheus (community package, still used for tokenizer reference)
 # Install from GitHub:  pip install git+https://github.com/Deathdadev/Orpheus-Speech-PyPi
 
 # Speech-to-Text (pulled in by pipecat-ai[whisper], listed for clarity)

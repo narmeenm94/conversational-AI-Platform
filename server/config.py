@@ -42,11 +42,11 @@ class Config:
     LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
     LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "150"))
 
-    # Text-to-Speech (Orpheus)
-    # Model name: "medium-3b" (default, best quality) or a HuggingFace model path
-    TTS_MODEL: str = os.getenv("TTS_MODEL", "medium-3b")
+    # Text-to-Speech (Orpheus via vllm + SNAC)
+    TTS_MODEL: str = os.getenv("TTS_MODEL", "canopylabs/orpheus-tts-0.1-finetune-prod")
     TTS_VOICE: str = os.getenv("TTS_VOICE", "tara")
     TTS_SAMPLE_RATE: int = int(os.getenv("TTS_SAMPLE_RATE", "24000"))
+    VLLM_BASE_URL: str = os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
 
     # RAG / Knowledge Base
     RAG_DB_PATH: str = os.getenv("RAG_DB_PATH", "./knowledge/db")
