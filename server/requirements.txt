@@ -10,8 +10,6 @@ websockets>=12.0
 
 # Text-to-Speech — Orpheus (community package with OrpheusModel)
 # Install from GitHub:  pip install git+https://github.com/Deathdadev/Orpheus-Speech-PyPi
-# If using vllm backend (Linux):
-vllm>=0.7.3
 
 # Speech-to-Text (pulled in by pipecat-ai[whisper], listed for clarity)
 faster-whisper>=1.0.0
