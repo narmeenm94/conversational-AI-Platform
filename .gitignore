@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Environment files with secrets
+server/.env
+
+# Models and caches (downloaded at runtime)
+models/
+server/knowledge/db/
+*.bin
+*.safetensors
+*.gguf
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Cursor
+.cursor/
+
+# Screenshots folder (at root only)
+/assets/

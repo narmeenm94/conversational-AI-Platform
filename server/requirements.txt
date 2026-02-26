@@ -1,0 +1,30 @@
+# Core ML / GPU
+torch>=2.1.0
+torchaudio>=2.1.0
+accelerate>=0.30.0
+
+# Pipeline Orchestration (includes whisper and ollama integrations)
+pipecat-ai[whisper,ollama,websocket]>=0.0.52
+websockets>=12.0
+
+# Text-to-Speech — Orpheus (community package with OrpheusModel)
+# Install from GitHub:  pip install git+https://github.com/Deathdadev/Orpheus-Speech-PyPi
+# If using vllm backend (Linux):
+vllm>=0.7.3
+
+# Speech-to-Text (pulled in by pipecat-ai[whisper], listed for clarity)
+faster-whisper>=1.0.0
+
+# RAG / Knowledge Base
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+
+# Sentiment / Emotion (optional)
+transformers>=4.40.0
+
+# Configuration
+python-dotenv>=1.0.0
+
+# Document ingestion helpers
+pypdf>=4.0.0
+python-docx>=1.0.0
