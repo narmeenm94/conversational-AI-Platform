@@ -163,7 +163,7 @@ if [[ "$VLLM_RUNNING" == "0" ]]; then
         --model "$ORPHEUS_MODEL" \
         --dtype bfloat16 \
         --gpu-memory-utilization 0.35 \
-        --max-model-len 4096 \
+        --max-model-len 8192 \
         --enforce-eager \
         --port "$VLLM_PORT" \
         > /workspace/vllm.log 2>&1 &
