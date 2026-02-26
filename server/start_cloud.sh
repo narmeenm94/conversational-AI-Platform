@@ -61,15 +61,13 @@ else
     source "$VENV_DIR/bin/activate"
 fi
 
-# ── 4. .env setup ──
-if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
-    log "Creating .env from template..."
-    cp "$SCRIPT_DIR/.env.cloud" "$SCRIPT_DIR/.env"
-    sed -i "s|^HF_TOKEN=.*|HF_TOKEN=$HF_TOKEN|" "$SCRIPT_DIR/.env"
-    sed -i "s|^HF_HOME=.*|HF_HOME=$HF_HOME|" "$SCRIPT_DIR/.env"
-fi
+# ── 4. .env setup (always refresh from template to pick up changes) ──
+log "Setting up .env..."
+cp "$SCRIPT_DIR/.env.cloud" "$SCRIPT_DIR/.env"
+sed -i "s|^HF_TOKEN=.*|HF_TOKEN=$HF_TOKEN|" "$SCRIPT_DIR/.env"
+sed -i "s|^HF_HOME=.*|HF_HOME=$HF_HOME|" "$SCRIPT_DIR/.env"
 
-# ── 5. Start Ollama daemon ──
+# ── 5. Start Ollama daemon FIRST (so it claims GPU memory before TTS) ──
 if ! pgrep -x ollama > /dev/null; then
     log "Starting Ollama daemon..."
     ollama serve &
@@ -84,7 +82,15 @@ else
     log "Llama model already downloaded."
 fi
 
-# ── 7. Start server ──
+# Warm up Ollama so the model is loaded into GPU VRAM before the server starts
+log "Warming up LLM (loading into GPU)..."
+curl -s http://localhost:11434/api/generate -d '{"model":"llama3.1:8b","prompt":"hi","stream":false}' > /dev/null 2>&1 || true
+
+# ── 7. GPU check ──
+log "GPU status:"
+nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader 2>/dev/null || echo "  nvidia-smi not available"
+
+# ── 8. Start server ──
 cd "$SCRIPT_DIR"
 log "Starting Conversational AI Avatar Server..."
 echo "═══════════════════════════════════════════════════════"
