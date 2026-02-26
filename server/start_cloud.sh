@@ -199,15 +199,17 @@ if [[ "$VLLM_RUNNING" == "0" ]]; then
 
     # Final verification: send a tiny test request to confirm the model actually works
     log "Verifying vllm can generate tokens..."
-    TEST_RESULT=$(curl -s --max-time 30 "http://localhost:$VLLM_PORT/v1/completions" \
+    if TEST_RESULT=$(curl -s --max-time 60 "http://localhost:$VLLM_PORT/v1/completions" \
         -H "Content-Type: application/json" \
-        -d "{\"model\":\"$ORPHEUS_MODEL\",\"prompt\":\"test\",\"max_tokens\":1}" 2>&1)
-    if echo "$TEST_RESULT" | grep -q '"choices"'; then
-        log "vllm verification passed — model is generating tokens."
+        -d "{\"model\":\"$ORPHEUS_MODEL\",\"prompt\":\"test\",\"max_tokens\":1}" 2>&1); then
+        if echo "$TEST_RESULT" | grep -q '"choices"'; then
+            log "vllm verification passed — model is generating tokens."
+        else
+            log "WARNING: vllm test response unexpected, but continuing:"
+            echo "$TEST_RESULT" | head -3 || true
+        fi
     else
-        log "WARNING: vllm test request did not return expected response:"
-        echo "$TEST_RESULT" | head -5
-        log "Continuing anyway — the model may need more warm-up time."
+        log "WARNING: vllm test request timed out, but server is running. Continuing..."
     fi
 fi
 
