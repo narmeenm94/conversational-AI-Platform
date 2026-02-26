@@ -87,9 +87,11 @@ else
     log "Llama model already downloaded."
 fi
 
-# Warm up Ollama so the model is loaded into GPU VRAM before the server starts
+# Warm up Ollama so the model is loaded into GPU VRAM before vllm starts
 log "Warming up LLM (loading into GPU)..."
 curl -s http://localhost:11434/api/generate -d '{"model":"llama3.1:8b","prompt":"hi","stream":false}' > /dev/null 2>&1 || true
+log "LLM warm-up complete. GPU after Ollama:"
+nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader 2>/dev/null || true
 
 # ── 7. Start vllm TTS server (separate process, controlled GPU memory) ──
 VLLM_PORT=${VLLM_PORT:-8000}
