@@ -170,9 +170,9 @@ if [[ "$VLLM_RUNNING" == "0" ]]; then
     VLLM_PID=$!
     echo "$VLLM_PID" > /workspace/vllm.pid
 
-    log "Waiting for vllm server to be ready (this can take 1-3 min on first load)..."
+    log "Waiting for vllm server to be ready (first load can take 3-5 min)..."
     VLLM_READY=0
-    for i in $(seq 1 180); do
+    for i in $(seq 1 360); do
         if ! kill -0 "$VLLM_PID" 2>/dev/null; then
             log "ERROR: vllm server died. Last 40 lines of /workspace/vllm.log:"
             tail -40 /workspace/vllm.log
@@ -192,7 +192,7 @@ if [[ "$VLLM_RUNNING" == "0" ]]; then
     done
 
     if [[ "$VLLM_READY" == "0" ]]; then
-        log "ERROR: vllm server did not become ready within 180s."
+        log "ERROR: vllm server did not become ready within 360s."
         tail -40 /workspace/vllm.log
         exit 1
     fi
