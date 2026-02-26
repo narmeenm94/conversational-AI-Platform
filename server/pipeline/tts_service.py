@@ -24,12 +24,14 @@ from pipecat.services.tts_service import TTSService
 
 logger = logging.getLogger(__name__)
 
+_SENTINEL = object()
+
 
 class OrpheusTTSService(TTSService):
     """Streams audio from Orpheus TTS through the Pipecat pipeline.
 
-    The LLM output (including emotion tags like <laugh>, <sigh>, <gasp>)
-    goes directly to Orpheus, which renders them as natural vocal sounds.
+    Audio chunks are yielded as soon as they're generated (not batched),
+    so the user hears audio while the rest is still being synthesized.
     """
 
     _MODEL_NAME_MAP = {
@@ -56,16 +58,25 @@ class OrpheusTTSService(TTSService):
         logger.info("Orpheus TTS model loaded.")
 
     def _load_model(self):
-        """Load OrpheusModel with explicit device placement.
-
-        We bypass OrpheusModel.__init__ to work around two library bugs:
-        1. The tokenizer uses the unmapped model name ("medium-3b")
-        2. device_map="auto" causes meta-tensor errors on smaller GPUs
-        """
+        """Load OrpheusModel, preferring vllm backend for speed."""
         from orpheus_tts import OrpheusModel
-        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         resolved = self._MODEL_NAME_MAP.get(self._model_name, self._model_name)
+
+        try:
+            logger.info("Attempting to load TTS with vllm backend...")
+            model = OrpheusModel(model_name=resolved)
+            logger.info("TTS loaded with engine: %s", getattr(model, 'engine', 'unknown'))
+            return model
+        except Exception as e:
+            logger.warning("vllm init failed (%s), falling back to transformers...", e)
+
+        return self._load_transformers_fallback(resolved)
+
+    def _load_transformers_fallback(self, resolved: str):
+        """Manual construction with transformers backend as fallback."""
+        from orpheus_tts import OrpheusModel
+        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         orpheus = OrpheusModel.__new__(OrpheusModel)
         orpheus.model_name = resolved
@@ -93,11 +104,7 @@ class OrpheusTTSService(TTSService):
         return orpheus
 
     async def run_tts(self, text: str, context_id: str) -> AsyncGenerator[Frame, None]:
-        """Convert text (with emotion tags) to streaming audio frames.
-
-        Pipecat calls this method with each sentence/chunk of LLM output.
-        We must yield TTSStartedFrame, then audio frames, then TTSStoppedFrame.
-        """
+        """Stream audio chunks to the pipeline as soon as each is generated."""
         if not text or not text.strip():
             return
 
@@ -107,22 +114,34 @@ class OrpheusTTSService(TTSService):
 
         try:
             prompt = f"{self._voice}: {text}"
-
+            queue: asyncio.Queue = asyncio.Queue()
             loop = asyncio.get_event_loop()
-            chunks = await loop.run_in_executor(
-                None,
-                lambda: list(
-                    self._model.generate_speech(prompt=prompt, voice=self._voice)
-                ),
-            )
 
-            for audio_chunk in chunks:
-                if audio_chunk and len(audio_chunk) > 0:
+            def _generate():
+                try:
+                    for chunk in self._model.generate_speech(prompt=prompt, voice=self._voice):
+                        loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                except Exception as exc:
+                    loop.call_soon_threadsafe(queue.put_nowait, exc)
+                finally:
+                    loop.call_soon_threadsafe(queue.put_nowait, _SENTINEL)
+
+            gen_future = loop.run_in_executor(None, _generate)
+
+            while True:
+                item = await queue.get()
+                if item is _SENTINEL:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                if item is not None and len(item) > 0:
                     yield TTSAudioRawFrame(
-                        audio=audio_chunk,
+                        audio=item,
                         sample_rate=24000,
                         num_channels=1,
                     )
+
+            await gen_future
 
         except Exception as e:
             logger.error("TTS error: %s", e, exc_info=True)

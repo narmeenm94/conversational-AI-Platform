@@ -102,13 +102,13 @@ async def session(url: str):
             start = time.time()
 
             try:
-                while time.time() - start < 120:
+                while time.time() - start < 180:
                     try:
-                        msg = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                        msg = await asyncio.wait_for(ws.recv(), timeout=10.0)
                         if isinstance(msg, bytes) and len(msg) > 0:
                             if first_byte_time is None:
                                 first_byte_time = time.time() - start
-                                print(f"  First response in {first_byte_time:.2f}s")
+                                print(f"  First audio in {first_byte_time:.2f}s")
                             response_audio.extend(msg)
                         elif isinstance(msg, str):
                             print(f"  Server: {msg}")
