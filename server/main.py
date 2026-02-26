@@ -158,9 +158,10 @@ async def run_pipeline():
         base_url=config.LLM_BASE_URL + "/v1",
     )
 
-    # ── TTS (Orpheus, custom Pipecat service) ──
-    logger.info("Initializing TTS: model=%s voice=%s", config.TTS_MODEL, config.TTS_VOICE)
+    # ── TTS (Orpheus via vllm + SNAC, custom Pipecat service) ──
+    logger.info("Initializing TTS: model=%s voice=%s vllm=%s", config.TTS_MODEL, config.TTS_VOICE, config.VLLM_BASE_URL)
     tts = OrpheusTTSService(
+        vllm_base_url=config.VLLM_BASE_URL,
         model_name=config.TTS_MODEL,
         voice=config.TTS_VOICE,
     )
@@ -244,7 +245,7 @@ async def run_pipeline():
     logger.info("WebSocket:  ws://%s:%d", config.SERVER_HOST, config.SERVER_PORT)
     logger.info("STT:        %s (%s, %s)", config.STT_MODEL, config.STT_DEVICE, config.STT_COMPUTE_TYPE)
     logger.info("LLM:        %s via %s", config.LLM_MODEL, config.LLM_BASE_URL)
-    logger.info("TTS:        %s (voice=%s)", config.TTS_MODEL, config.TTS_VOICE)
+    logger.info("TTS:        %s (voice=%s, vllm=%s)", config.TTS_MODEL, config.TTS_VOICE, config.VLLM_BASE_URL)
     logger.info("Character:  %s — %s", config.CHARACTER_NAME, config.CHARACTER_DESCRIPTION)
     if rag_service.document_count > 0:
         logger.info("Knowledge:  %d document chunks loaded", rag_service.document_count)
