@@ -21,12 +21,18 @@ fi
 
 log() { echo -e "\n\033[1;36m>>> $*\033[0m"; }
 
+# ── Redirect all large caches to persistent volume ──
+export HF_HOME=/workspace/huggingface
+export HUGGINGFACE_HUB_CACHE=/workspace/huggingface/hub
+export OLLAMA_MODELS=/workspace/ollama_models
+mkdir -p "$HF_HOME" "$OLLAMA_MODELS"
+
 # ── Skip installs if --start ──
 if [[ "$START_ONLY" == false ]]; then
 
     # ── System deps ──
     log "Installing system dependencies..."
-    apt-get update -qq && apt-get install -y -qq curl git > /dev/null 2>&1 || true
+    apt-get update -qq && apt-get install -y -qq curl git zstd > /dev/null 2>&1 || true
 
     # ── Python deps ──
     log "Installing Python dependencies..."
