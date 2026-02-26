@@ -84,9 +84,9 @@ login(token='$HF_TOKEN', add_to_git_credential=False)
 print('  HuggingFace login successful')
 " || echo "  WARNING: huggingface_hub login failed"
 
-# Pre-download the Orpheus TTS model so vllm finds it in cache
+# Pre-download the Orpheus TTS model so vllm finds it in cache (skip training artifacts)
 ORPHEUS_MODEL="canopylabs/orpheus-3b-0.1-ft"
-log "Ensuring Orpheus TTS model is downloaded..."
+log "Ensuring Orpheus TTS model is downloaded (inference files only)..."
 python -c "
 from huggingface_hub import snapshot_download
 import os
@@ -94,12 +94,10 @@ path = snapshot_download(
     '$ORPHEUS_MODEL',
     token=os.environ.get('HF_TOKEN'),
     cache_dir='$HUGGINGFACE_HUB_CACHE',
+    ignore_patterns=['optimizer*', 'training_args*', 'global_step*', 'rng_state*', 'scheduler*', '*.pt'],
 )
 print(f'  Model cached at: {path}')
-" || {
-    log "WARNING: snapshot_download failed, trying huggingface-cli..."
-    huggingface-cli download "$ORPHEUS_MODEL" --cache-dir "$HUGGINGFACE_HUB_CACHE" --token "$HF_TOKEN"
-}
+"
 
 # ── 5. .env setup (always refresh from template to pick up changes) ──
 log "Setting up .env..."
