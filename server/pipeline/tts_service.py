@@ -130,7 +130,26 @@ class OrpheusTTSService(TTSService):
         await super().start(frame)
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self._load_models)
+        await self._verify_vllm_connection()
         logger.info("Orpheus TTS ready (vllm + SNAC).")
+
+    async def _verify_vllm_connection(self):
+        """Verify the vllm server is reachable and serving the model."""
+        for attempt in range(10):
+            try:
+                models = await self._client.models.list()
+                model_ids = [m.id for m in models.data]
+                if self._model_name in model_ids:
+                    logger.info("vllm server verified: model '%s' is loaded.", self._model_name)
+                    return
+                logger.warning("vllm server is up but model '%s' not in %s", self._model_name, model_ids)
+            except Exception as e:
+                if attempt < 9:
+                    logger.warning("vllm not ready (attempt %d/10): %s", attempt + 1, e)
+                    await asyncio.sleep(5)
+                else:
+                    logger.error("vllm server not reachable after 10 attempts at %s", self._vllm_base_url)
+                    raise RuntimeError(f"Cannot connect to vllm server at {self._vllm_base_url}: {e}")
 
     def _load_models(self):
         from openai import AsyncOpenAI
@@ -170,6 +189,33 @@ class OrpheusTTSService(TTSService):
         codes = [t - CODE_TOKEN_OFFSET for t in raw_codes]
         return _redistribute_codes(codes, self._snac_model, self._snac_device)
 
+    async def _create_stream_with_retry(self, prompt: str, max_retries: int = 3):
+        """Create a vllm completions stream with retry logic for connection errors."""
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                return await self._client.completions.create(
+                    model=self._model_name,
+                    prompt=prompt,
+                    max_tokens=self._max_tokens,
+                    temperature=self._temperature,
+                    top_p=self._top_p,
+                    stream=True,
+                    extra_body={
+                        "repetition_penalty": self._repetition_penalty,
+                    },
+                )
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    wait = 2 ** attempt
+                    logger.warning(
+                        "vllm connection attempt %d/%d failed: %s — retrying in %ds",
+                        attempt + 1, max_retries, e, wait,
+                    )
+                    await asyncio.sleep(wait)
+        raise last_error
+
     async def run_tts(self, text: str, context_id: str) -> AsyncGenerator[Frame, None]:
         """Stream audio frames from vllm token generation + SNAC decoding.
 
@@ -190,17 +236,7 @@ class OrpheusTTSService(TTSService):
                 None, functools.partial(self._format_prompt, text)
             )
 
-            stream = await self._client.completions.create(
-                model=self._model_name,
-                prompt=prompt,
-                max_tokens=self._max_tokens,
-                temperature=self._temperature,
-                top_p=self._top_p,
-                stream=True,
-                extra_body={
-                    "repetition_penalty": self._repetition_penalty,
-                },
-            )
+            stream = await self._create_stream_with_retry(prompt)
 
             accumulated_text = ""
             processed_code_count = 0

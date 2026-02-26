@@ -93,39 +93,89 @@ curl -s http://localhost:11434/api/generate -d '{"model":"llama3.1:8b","prompt":
 log "LLM warm-up complete. GPU after Ollama:"
 nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader 2>/dev/null || true
 
-# ── 7. Start vllm TTS server (separate process, controlled GPU memory) ──
+# ── 7. Kill any leftover vllm processes from prior runs ──
 VLLM_PORT=${VLLM_PORT:-8000}
 ORPHEUS_MODEL="canopylabs/orpheus-tts-0.1-finetune-prod"
 
-if ! curl -s "http://localhost:$VLLM_PORT/health" > /dev/null 2>&1; then
+if [[ -f /workspace/vllm.pid ]]; then
+    OLD_PID=$(cat /workspace/vllm.pid)
+    if kill -0 "$OLD_PID" 2>/dev/null; then
+        # Check if it's actually responsive
+        if curl -s --max-time 5 "http://localhost:$VLLM_PORT/v1/models" > /dev/null 2>&1; then
+            log "vllm TTS server already running and responsive on port $VLLM_PORT."
+            VLLM_RUNNING=1
+        else
+            log "Stale vllm process found (pid=$OLD_PID), killing it..."
+            kill "$OLD_PID" 2>/dev/null || true
+            sleep 3
+            kill -9 "$OLD_PID" 2>/dev/null || true
+            VLLM_RUNNING=0
+        fi
+    else
+        VLLM_RUNNING=0
+    fi
+else
+    VLLM_RUNNING=0
+fi
+
+if [[ "$VLLM_RUNNING" == "0" ]]; then
     log "Starting vllm TTS server on port $VLLM_PORT..."
-    VLLM_USE_V1=0 HF_TOKEN="$HF_TOKEN" \
+    VLLM_USE_V1=0 \
+    HF_TOKEN="$HF_TOKEN" \
+    HUGGING_FACE_HUB_TOKEN="$HF_TOKEN" \
+    HUGGINGFACE_HUB_TOKEN="$HF_TOKEN" \
+    HF_HOME="$HF_HOME" \
+    HUGGINGFACE_HUB_CACHE="$HUGGINGFACE_HUB_CACHE" \
         "$VENV_DIR/bin/python" -m vllm.entrypoints.openai.api_server \
         --model "$ORPHEUS_MODEL" \
         --dtype bfloat16 \
         --gpu-memory-utilization 0.35 \
         --max-model-len 4096 \
+        --enforce-eager \
         --port "$VLLM_PORT" \
-        --disable-log-requests \
         > /workspace/vllm.log 2>&1 &
     VLLM_PID=$!
     echo "$VLLM_PID" > /workspace/vllm.pid
 
-    log "Waiting for vllm server to be ready..."
-    for i in $(seq 1 120); do
-        if curl -s "http://localhost:$VLLM_PORT/health" > /dev/null 2>&1; then
-            log "vllm TTS server ready (took ${i}s)"
+    log "Waiting for vllm server to be ready (this can take 1-3 min on first load)..."
+    VLLM_READY=0
+    for i in $(seq 1 180); do
+        if ! kill -0 "$VLLM_PID" 2>/dev/null; then
+            log "ERROR: vllm server died. Last 40 lines of /workspace/vllm.log:"
+            tail -40 /workspace/vllm.log
+            exit 1
+        fi
+        # Test with an actual /v1/models request, not just /health
+        if curl -s --max-time 3 "http://localhost:$VLLM_PORT/v1/models" 2>/dev/null | grep -q "$ORPHEUS_MODEL"; then
+            log "vllm TTS server ready and serving model (took ${i}s)"
+            VLLM_READY=1
             break
         fi
-        if ! kill -0 "$VLLM_PID" 2>/dev/null; then
-            log "ERROR: vllm server died. Check /workspace/vllm.log"
-            tail -30 /workspace/vllm.log
-            exit 1
+        if (( i % 15 == 0 )); then
+            log "  Still waiting... (${i}s elapsed)"
+            tail -3 /workspace/vllm.log 2>/dev/null || true
         fi
         sleep 1
     done
-else
-    log "vllm TTS server already running on port $VLLM_PORT."
+
+    if [[ "$VLLM_READY" == "0" ]]; then
+        log "ERROR: vllm server did not become ready within 180s."
+        tail -40 /workspace/vllm.log
+        exit 1
+    fi
+
+    # Final verification: send a tiny test request to confirm the model actually works
+    log "Verifying vllm can generate tokens..."
+    TEST_RESULT=$(curl -s --max-time 30 "http://localhost:$VLLM_PORT/v1/completions" \
+        -H "Content-Type: application/json" \
+        -d "{\"model\":\"$ORPHEUS_MODEL\",\"prompt\":\"test\",\"max_tokens\":1}" 2>&1)
+    if echo "$TEST_RESULT" | grep -q '"choices"'; then
+        log "vllm verification passed — model is generating tokens."
+    else
+        log "WARNING: vllm test request did not return expected response:"
+        echo "$TEST_RESULT" | head -5
+        log "Continuing anyway — the model may need more warm-up time."
+    fi
 fi
 
 # ── 8. GPU check ──
