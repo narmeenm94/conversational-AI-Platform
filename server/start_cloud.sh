@@ -23,6 +23,7 @@ else
     echo "ERROR: No HF_TOKEN found. Run:  echo 'your_token' > /workspace/.hf_token"
     exit 1
 fi
+export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
 export HUGGINGFACE_HUB_TOKEN="$HF_TOKEN"
 export HF_HOME=/workspace/huggingface
 export HUGGINGFACE_HUB_CACHE=/workspace/huggingface/hub
@@ -31,6 +32,10 @@ export OLLAMA_MODELS=/workspace/ollama_models
 log() { echo -e "\n\033[1;36m>>> $*\033[0m"; }
 
 mkdir -p "$HF_HOME" "$OLLAMA_MODELS"
+
+# Save HF token to the huggingface cache so all tools (vllm, transformers) can find it
+mkdir -p "$HF_HOME"
+echo "$HF_TOKEN" > "$HF_HOME/token"
 
 # ── 1. System deps (always needed after restart, very fast) ──
 log "Installing system deps..."
@@ -66,7 +71,15 @@ else
     pip install --quiet vllm snac openai 2>/dev/null || pip install vllm snac openai
 fi
 
-# ── 4. .env setup (always refresh from template to pick up changes) ──
+# ── 4. HuggingFace authentication (required for gated Orpheus model) ──
+log "Authenticating with HuggingFace..."
+python -c "
+from huggingface_hub import login
+login(token='$HF_TOKEN', add_to_git_credential=False)
+print('HuggingFace login successful')
+" 2>/dev/null || echo "  huggingface-cli login fallback..." && huggingface-cli login --token "$HF_TOKEN" 2>/dev/null || true
+
+# ── 5. .env setup (always refresh from template to pick up changes) ──
 log "Setting up .env..."
 cp "$SCRIPT_DIR/.env.cloud" "$SCRIPT_DIR/.env"
 sed -i "s|^HF_TOKEN=.*|HF_TOKEN=$HF_TOKEN|" "$SCRIPT_DIR/.env"
