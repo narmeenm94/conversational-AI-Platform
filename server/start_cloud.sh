@@ -33,10 +33,6 @@ log() { echo -e "\n\033[1;36m>>> $*\033[0m"; }
 
 mkdir -p "$HF_HOME" "$OLLAMA_MODELS"
 
-# Save HF token to the huggingface cache so all tools (vllm, transformers) can find it
-mkdir -p "$HF_HOME"
-echo "$HF_TOKEN" > "$HF_HOME/token"
-
 # ── 1. System deps (always needed after restart, very fast) ──
 log "Installing system deps..."
 apt-get update -qq && apt-get install -y -qq zstd curl ffmpeg > /dev/null 2>&1 || true
@@ -73,11 +69,36 @@ fi
 
 # ── 4. HuggingFace authentication (required for gated Orpheus model) ──
 log "Authenticating with HuggingFace..."
+# Save token to ALL locations transformers/huggingface_hub might check
+mkdir -p "$HF_HOME"
+echo "$HF_TOKEN" > "$HF_HOME/token"
+mkdir -p ~/.cache/huggingface
+echo "$HF_TOKEN" > ~/.cache/huggingface/token
+mkdir -p ~/.huggingface
+echo "$HF_TOKEN" > ~/.huggingface/token
+
 python -c "
 from huggingface_hub import login
 login(token='$HF_TOKEN', add_to_git_credential=False)
-print('HuggingFace login successful')
-" 2>/dev/null || echo "  huggingface-cli login fallback..." && huggingface-cli login --token "$HF_TOKEN" 2>/dev/null || true
+print('  HuggingFace login successful')
+" || echo "  WARNING: huggingface_hub login failed"
+
+# Pre-download the Orpheus TTS model so vllm finds it in cache
+ORPHEUS_MODEL="canopylabs/orpheus-3b-0.1-ft"
+log "Ensuring Orpheus TTS model is downloaded..."
+python -c "
+from huggingface_hub import snapshot_download
+import os
+path = snapshot_download(
+    '$ORPHEUS_MODEL',
+    token=os.environ.get('HF_TOKEN'),
+    cache_dir='$HUGGINGFACE_HUB_CACHE',
+)
+print(f'  Model cached at: {path}')
+" || {
+    log "WARNING: snapshot_download failed, trying huggingface-cli..."
+    huggingface-cli download "$ORPHEUS_MODEL" --cache-dir "$HUGGINGFACE_HUB_CACHE" --token "$HF_TOKEN"
+}
 
 # ── 5. .env setup (always refresh from template to pick up changes) ──
 log "Setting up .env..."
