@@ -68,6 +68,8 @@ class OrpheusTTSService(TTSService):
         from orpheus_tts import OrpheusModel
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
+        resolved = self._MODEL_NAME_MAP.get(self._model_name, self._model_name)
+
         orpheus = OrpheusModel.__new__(OrpheusModel)
         orpheus.model_name = resolved
         orpheus.dtype = torch.bfloat16
