@@ -1,10 +1,10 @@
 """Microphone test client — talk to the AI server from your terminal.
 
 Records from your mic, streams audio to the server over WebSocket,
-and plays back the AI's spoken response through your speakers.
+and plays back the AI's spoken response through your speakers in real-time.
 
 Usage:
-    python tools/mic_test_client.py
+    python tools/mic_test_client.py --url ws://IP:PORT
 
 Press ENTER to start recording, ENTER again to stop and send.
 Press Ctrl+C to quit.
@@ -12,7 +12,6 @@ Press Ctrl+C to quit.
 
 import argparse
 import asyncio
-import struct
 import sys
 import threading
 import time
@@ -62,19 +61,70 @@ def record_until_enter(sample_rate: int = SEND_SAMPLE_RATE) -> bytes:
     return audio.tobytes()
 
 
-def play_audio(pcm_bytes: bytes, sample_rate: int = RECV_SAMPLE_RATE):
-    """Play raw PCM audio through the speakers."""
-    if not pcm_bytes:
-        return
-    audio = np.frombuffer(pcm_bytes, dtype=np.int16)
-    sd.play(audio, samplerate=sample_rate, blocking=True)
+class StreamingPlayer:
+    """Plays audio chunks in real-time as they arrive."""
+
+    def __init__(self, sample_rate: int = RECV_SAMPLE_RATE):
+        self._sample_rate = sample_rate
+        self._buffer = bytearray()
+        self._lock = threading.Lock()
+        self._stream = None
+        self._playing = False
+
+    def start(self):
+        self._playing = True
+        self._stream = sd.OutputStream(
+            samplerate=self._sample_rate,
+            channels=1,
+            dtype="int16",
+            blocksize=2400,
+            callback=self._callback,
+        )
+        self._stream.start()
+
+    def _callback(self, outdata, frame_count, time_info, status):
+        bytes_needed = frame_count * 2  # int16 = 2 bytes per sample
+        with self._lock:
+            available = len(self._buffer)
+            if available >= bytes_needed:
+                chunk = bytes(self._buffer[:bytes_needed])
+                del self._buffer[:bytes_needed]
+            elif available > 0:
+                chunk = bytes(self._buffer) + b'\x00' * (bytes_needed - available)
+                self._buffer.clear()
+            else:
+                chunk = b'\x00' * bytes_needed
+
+        outdata[:] = np.frombuffer(chunk, dtype=np.int16).reshape(-1, 1)
+
+    def feed(self, data: bytes):
+        with self._lock:
+            self._buffer.extend(data)
+
+    def stop(self):
+        if self._stream:
+            remaining = True
+            while remaining:
+                time.sleep(0.05)
+                with self._lock:
+                    remaining = len(self._buffer) > 0
+            time.sleep(0.2)
+            self._stream.stop()
+            self._stream.close()
+            self._stream = None
+        self._playing = False
+
+    @property
+    def buffered_seconds(self):
+        with self._lock:
+            return len(self._buffer) / (self._sample_rate * 2)
 
 
 async def session(url: str):
     """Run one interactive session."""
     print(f"Connecting to {url}...")
 
-    async with websockets.connect(url) as ws:
+    async with websockets.connect(url, ping_interval=30, ping_timeout=120) as ws:
         print("Connected to server!\n")
 
         while True:
@@ -91,15 +141,16 @@ async def session(url: str):
             duration = len(pcm) / (SEND_SAMPLE_RATE * 2)
             print(f"Sending {duration:.1f}s of audio...")
 
-            chunk_size = 3200  # 100ms chunks
+            chunk_size = 3200
             for i in range(0, len(pcm), chunk_size):
                 await ws.send(pcm[i : i + chunk_size])
                 await asyncio.sleep(0.05)
 
-            print("Waiting for AI response (this may take a minute on first run)...")
-            response_audio = bytearray()
+            print("Waiting for AI response...")
+            player = StreamingPlayer()
             first_byte_time = None
             start = time.time()
+            total_bytes = 0
 
             try:
                 while time.time() - start < 180:
@@ -108,23 +159,24 @@ async def session(url: str):
                         if isinstance(msg, bytes) and len(msg) > 0:
                             if first_byte_time is None:
                                 first_byte_time = time.time() - start
-                                print(f"  First audio in {first_byte_time:.2f}s")
-                            response_audio.extend(msg)
+                                print(f"  First audio in {first_byte_time:.2f}s — playing...")
+                                player.start()
+                            player.feed(msg)
+                            total_bytes += len(msg)
                         elif isinstance(msg, str):
                             print(f"  Server: {msg}")
                     except asyncio.TimeoutError:
-                        if len(response_audio) > 0:
+                        if total_bytes > 0:
                             break
                         continue
             except websockets.exceptions.ConnectionClosed:
                 print("Connection closed by server.")
                 return
 
-            if response_audio:
-                resp_duration = len(response_audio) / (RECV_SAMPLE_RATE * 2)
-                print(f"  Received {len(response_audio)} bytes ({resp_duration:.1f}s of audio)")
-                print("  Playing response...")
-                play_audio(bytes(response_audio))
+            if total_bytes > 0:
+                resp_duration = total_bytes / (RECV_SAMPLE_RATE * 2)
+                print(f"  Received {total_bytes} bytes ({resp_duration:.1f}s of audio)")
+                player.stop()
             else:
                 print("  No audio response received.")
 

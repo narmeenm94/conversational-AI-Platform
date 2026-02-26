@@ -196,6 +196,8 @@ async def run_pipeline():
             audio_out_channels=1,
             vad_analyzer=SileroVADAnalyzer(sample_rate=16000),
             serializer=RawAudioSerializer(sample_rate=16000, num_channels=1),
+            ping_interval_secs=30,
+            ping_timeout_secs=120,
         ),
     )
 
