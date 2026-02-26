@@ -61,78 +61,12 @@ def record_until_enter(sample_rate: int = SEND_SAMPLE_RATE) -> bytes:
     return audio.tobytes()
 
 
-class StreamingPlayer:
-    """Plays audio with a jitter buffer to prevent choppy playback.
-
-    Pre-buffers audio before starting playback so that gaps between
-    TTS chunks don't cause audible dropouts.
-    """
-
-    PRE_BUFFER_BYTES = 48000 * 2  # 2 seconds at 24kHz int16
-
-    def __init__(self, sample_rate: int = RECV_SAMPLE_RATE):
-        self._sample_rate = sample_rate
-        self._buffer = bytearray()
-        self._lock = threading.Lock()
-        self._stream = None
-        self._started = False
-        self._finished_feeding = False
-
-    def feed(self, data: bytes):
-        with self._lock:
-            self._buffer.extend(data)
-
-        if not self._started and len(self._buffer) >= self.PRE_BUFFER_BYTES:
-            self._start_playback()
-
-    def finish(self):
-        """Signal that no more audio will arrive, then drain the buffer."""
-        if not self._started and len(self._buffer) > 0:
-            self._start_playback()
-
-        self._finished_feeding = True
-
-        if self._stream:
-            while True:
-                time.sleep(0.05)
-                with self._lock:
-                    if len(self._buffer) == 0:
-                        break
-            time.sleep(0.15)
-            self._stream.stop()
-            self._stream.close()
-            self._stream = None
-
-    def _start_playback(self):
-        self._started = True
-        self._stream = sd.OutputStream(
-            samplerate=self._sample_rate,
-            channels=1,
-            dtype="int16",
-            blocksize=4800,
-            callback=self._callback,
-        )
-        self._stream.start()
-
-    def _callback(self, outdata, frame_count, time_info, status):
-        bytes_needed = frame_count * 2
-        with self._lock:
-            available = len(self._buffer)
-            if available >= bytes_needed:
-                chunk = bytes(self._buffer[:bytes_needed])
-                del self._buffer[:bytes_needed]
-            elif available > 0:
-                chunk = bytes(self._buffer) + b'\x00' * (bytes_needed - available)
-                self._buffer.clear()
-            else:
-                chunk = b'\x00' * bytes_needed
-
-        outdata[:] = np.frombuffer(chunk, dtype=np.int16).reshape(-1, 1)
-
-    @property
-    def buffered_seconds(self):
-        with self._lock:
-            return len(self._buffer) / (self._sample_rate * 2)
+def play_audio(pcm_bytes: bytes, sample_rate: int = RECV_SAMPLE_RATE):
+    """Play raw PCM int16 audio through the speakers."""
+    if not pcm_bytes:
+        return
+    audio = np.frombuffer(pcm_bytes, dtype=np.int16)
+    sd.play(audio, samplerate=sample_rate, blocking=True)
 
 
 async def session(url: str):
@@ -162,10 +96,9 @@ async def session(url: str):
                 await asyncio.sleep(0.05)
 
             print("Waiting for AI response...")
-            player = StreamingPlayer()
+            response_audio = bytearray()
             first_byte_time = None
             start = time.time()
-            total_bytes = 0
 
             try:
                 while time.time() - start < 180:
@@ -174,26 +107,24 @@ async def session(url: str):
                         if isinstance(msg, bytes) and len(msg) > 0:
                             if first_byte_time is None:
                                 first_byte_time = time.time() - start
-                                print(f"  First audio in {first_byte_time:.2f}s — buffering...")
-                            player.feed(msg)
-                            total_bytes += len(msg)
-                            if player._started and not hasattr(player, '_announced'):
-                                print(f"  Playing...")
-                                player._announced = True
+                                print(f"  First audio chunk in {first_byte_time:.2f}s")
+                            response_audio.extend(msg)
                         elif isinstance(msg, str):
                             print(f"  Server: {msg}")
                     except asyncio.TimeoutError:
-                        if total_bytes > 0:
+                        if len(response_audio) > 0:
                             break
                         continue
             except websockets.exceptions.ConnectionClosed:
                 print("Connection closed by server.")
                 return
 
-            if total_bytes > 0:
-                resp_duration = total_bytes / (RECV_SAMPLE_RATE * 2)
-                print(f"  Total: {total_bytes} bytes ({resp_duration:.1f}s of audio)")
-                player.finish()
+            if response_audio:
+                total_time = time.time() - start
+                resp_duration = len(response_audio) / (RECV_SAMPLE_RATE * 2)
+                print(f"  Ready in {total_time:.1f}s — {resp_duration:.1f}s of audio")
+                print(f"  Playing...")
+                play_audio(bytes(response_audio))
             else:
                 print("  No audio response received.")
 
