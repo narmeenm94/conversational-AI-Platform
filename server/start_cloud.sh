@@ -25,6 +25,7 @@ else
 fi
 export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
 export HUGGINGFACE_HUB_TOKEN="$HF_TOKEN"
+export HF_HUB_ENABLE_HF_TRANSFER=0
 export HF_HOME=/workspace/huggingface
 export HUGGINGFACE_HUB_CACHE=/workspace/huggingface/hub
 export OLLAMA_MODELS=/workspace/ollama_models
