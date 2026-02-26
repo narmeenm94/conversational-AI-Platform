@@ -105,7 +105,7 @@ class OrpheusTTSService(TTSService):
         self,
         *,
         vllm_base_url: str = "http://localhost:8000/v1",
-        model_name: str = "canopylabs/orpheus-tts-0.1-finetune-prod",
+        model_name: str = "canopylabs/orpheus-3b-0.1-ft",
         voice: str = "tara",
         temperature: float = 0.6,
         top_p: float = 0.95,

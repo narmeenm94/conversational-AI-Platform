@@ -108,7 +108,7 @@ nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader 2>/dev/nul
 
 # ── 7. Kill any leftover vllm processes from prior runs ──
 VLLM_PORT=${VLLM_PORT:-8000}
-ORPHEUS_MODEL="canopylabs/orpheus-tts-0.1-finetune-prod"
+ORPHEUS_MODEL="canopylabs/orpheus-3b-0.1-ft"
 
 if [[ -f /workspace/vllm.pid ]]; then
     OLD_PID=$(cat /workspace/vllm.pid)

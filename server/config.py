@@ -43,7 +43,7 @@ class Config:
     LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "150"))
 
     # Text-to-Speech (Orpheus via vllm + SNAC)
-    TTS_MODEL: str = os.getenv("TTS_MODEL", "canopylabs/orpheus-tts-0.1-finetune-prod")
+    TTS_MODEL: str = os.getenv("TTS_MODEL", "canopylabs/orpheus-3b-0.1-ft")
     TTS_VOICE: str = os.getenv("TTS_VOICE", "tara")
     TTS_SAMPLE_RATE: int = int(os.getenv("TTS_SAMPLE_RATE", "24000"))
     VLLM_BASE_URL: str = os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
