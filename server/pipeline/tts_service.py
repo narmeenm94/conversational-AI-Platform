@@ -110,7 +110,7 @@ class OrpheusTTSService(TTSService):
         temperature: float = 0.6,
         top_p: float = 0.95,
         repetition_penalty: float = 1.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 1200,
         **kwargs,
     ):
         super().__init__(sample_rate=24000, push_stop_frames=True, **kwargs)
