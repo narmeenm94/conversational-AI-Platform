@@ -4,7 +4,8 @@ torchaudio>=2.1.0
 accelerate>=0.30.0
 
 # Pipeline Orchestration (includes whisper and ollama integrations)
-pipecat-ai[whisper,websocket]>=0.0.52
+pipecat-ai[whisper,websocket]>=0.0.103,<0.1
+nltk>=3.9,<4
 ollama>=0.4.0
 websockets>=12.0
 
@@ -16,6 +17,17 @@ openai>=1.0.0
 
 # Text-to-Speech — Orpheus (community package, still used for tokenizer reference)
 # Install from GitHub:  pip install git+https://github.com/Deathdadev/Orpheus-Speech-PyPi
+
+# Text-to-Speech — Kokoro (optional, used when TTS_BACKEND=kokoro for native Windows local runs)
+# Install separately so cloud installs stay slim:
+#   pip install kokoro soundfile
+
+# Text-to-Speech — Chatterbox Turbo (optional expressive English profile)
+# Install in Python 3.11: pip install chatterbox-tts
+
+# Text-to-Speech - local quantized Orpheus (optional Windows/CPU streaming)
+# Install separately: pip install orpheus-cpp
+# Then install the Windows llama-cpp-python wheel documented by Orpheus CPP.
 
 # Speech-to-Text (pulled in by pipecat-ai[whisper], listed for clarity)
 faster-whisper>=1.0.0

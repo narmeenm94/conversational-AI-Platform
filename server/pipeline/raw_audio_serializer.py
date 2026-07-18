@@ -5,12 +5,18 @@ This is the simplest possible serializer: binary messages are audio,
 text messages are ignored.
 """
 
+import json
 import logging
 
 from pipecat.frames.frames import (
     Frame,
+    InterruptionFrame,
     InputAudioRawFrame,
     OutputAudioRawFrame,
+    OutputTransportMessageFrame,
+    OutputTransportMessageUrgentFrame,
+    TTSStartedFrame,
+    TTSStoppedFrame,
 )
 from pipecat.serializers.base_serializer import FrameSerializer
 
@@ -33,6 +39,14 @@ class RawAudioSerializer(FrameSerializer):
     async def serialize(self, frame: Frame) -> str | bytes | None:
         if isinstance(frame, OutputAudioRawFrame):
             return frame.audio
+        if isinstance(frame, (OutputTransportMessageFrame, OutputTransportMessageUrgentFrame)):
+            return json.dumps(frame.message, separators=(",", ":"), ensure_ascii=False)
+        if isinstance(frame, TTSStartedFrame):
+            return json.dumps({"v": 1, "type": "assistant_speech_started"})
+        if isinstance(frame, TTSStoppedFrame):
+            return json.dumps({"v": 1, "type": "assistant_speech_stopped"})
+        if isinstance(frame, InterruptionFrame):
+            return json.dumps({"v": 1, "type": "assistant_interrupted"})
         return None
 
     async def deserialize(self, data: str | bytes) -> Frame | None:

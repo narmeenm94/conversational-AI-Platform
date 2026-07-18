@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.venv-*/
 venv/
 
 # Environment files with secrets
@@ -11,6 +12,7 @@ server/.env
 # Models and caches (downloaded at runtime)
 models/
 server/knowledge/db/
+server/knowledge/characters/
 *.bin
 *.safetensors
 *.gguf
@@ -31,3 +33,16 @@ desktop.ini
 
 # Screenshots folder (at root only)
 /assets/
+
+# Local runtime output
+server/*.log
+server/runtime/
+tools/unity_compile_check/bin/
+tools/unity_compile_check/obj/
+
+# Unity generated state
+unity-client/Library/
+unity-client/Logs/
+unity-client/Temp/
+unity-client/UserSettings/
+unity-client/obj/

@@ -1,101 +1,140 @@
+using System.Collections.Concurrent;
+using System.Threading;
 using UnityEngine;
 
+/// <summary>
+/// Low-latency PCM ring player. The Unity audio thread pulls queued samples
+/// through a streaming AudioClip, which also gives uLipSync a real AudioSource
+/// signal to analyse in OnAudioFilterRead.
+/// </summary>
 public class AudioStreamPlayer : MonoBehaviour
 {
     [Header("Audio Settings")]
     public int serverSampleRate = 24000;
+    [Range(20, 500)] public int prebufferMs = 40;
+    [Range(2, 30)] public int deClickFadeMs = 8;
+    [Range(0.05f, 1f)] public float speakingTailSeconds = 0.25f;
 
     [Header("References")]
     public AudioSource audioSource;
 
+    private readonly ConcurrentQueue<float[]> _chunks = new ConcurrentQueue<float[]>();
     private AudioClip _streamClip;
-    private int _writePos;
-    private bool _isPlaying;
-    private float _silenceTimer;
+    private float[] _activeChunk;
+    private int _activeOffset;
+    private int _queuedSamples;
+    private int _flushRequested;
+    private bool _primed;
+    private int _fadeInSample;
+    private float _currentRms;
+    private float _lastChunkTime = -100f;
 
-    private const int CLIP_SECONDS = 30;
-    private const float SILENCE_THRESHOLD = 0.001f;
-    private const float SILENCE_TIMEOUT = 0.5f;
+    public bool IsPlaying =>
+        Volatile.Read(ref _queuedSamples) > 0 ||
+        Time.unscaledTime - _lastChunkTime < speakingTailSeconds;
 
-    public bool IsPlaying => _isPlaying;
-
-    void Start()
+    void Awake()
     {
+        if (audioSource == null)
+            audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+            audioSource = gameObject.AddComponent<AudioSource>();
+
+        audioSource.playOnAwake = false;
+        audioSource.loop = true;
+        audioSource.spatialBlend = 1f;
+
         _streamClip = AudioClip.Create(
-            "ServerAudioStream",
-            serverSampleRate * CLIP_SECONDS,
+            "ConversationalAIStream",
+            serverSampleRate * 2,
             1,
             serverSampleRate,
-            false
+            true,
+            OnAudioRead
         );
         audioSource.clip = _streamClip;
-        audioSource.loop = true;
+        audioSource.Play();
     }
 
     public void EnqueueAudioChunk(byte[] pcmBytes)
     {
         if (pcmBytes == null || pcmBytes.Length < 2) return;
 
-        int sampleCount = pcmBytes.Length / 2;
-        float[] samples = new float[sampleCount];
-
-        for (int i = 0; i < sampleCount; i++)
+        int count = pcmBytes.Length / 2;
+        var samples = new float[count];
+        for (int i = 0; i < count; i++)
         {
-            short val = (short)(pcmBytes[i * 2] | (pcmBytes[i * 2 + 1] << 8));
-            samples[i] = val / 32768f;
+            short value = (short)(pcmBytes[i * 2] | (pcmBytes[i * 2 + 1] << 8));
+            samples[i] = value / 32768f;
         }
 
-        int clipLength = serverSampleRate * CLIP_SECONDS;
-        _streamClip.SetData(samples, _writePos % clipLength);
-        _writePos += sampleCount;
-
-        _silenceTimer = 0f;
-
-        if (!_isPlaying)
-        {
-            audioSource.Play();
-            _isPlaying = true;
-        }
+        _chunks.Enqueue(samples);
+        Interlocked.Add(ref _queuedSamples, count);
+        _lastChunkTime = Time.unscaledTime;
     }
 
-    public float GetCurrentVolume()
-    {
-        if (!_isPlaying || !audioSource.isPlaying) return 0f;
-
-        float[] outputData = new float[256];
-        audioSource.GetOutputData(outputData, 0);
-
-        float sum = 0f;
-        for (int i = 0; i < outputData.Length; i++)
-            sum += outputData[i] * outputData[i];
-
-        return Mathf.Sqrt(sum / outputData.Length);
-    }
+    public float GetCurrentVolume() => Volatile.Read(ref _currentRms);
 
     public void StopPlayback()
     {
-        audioSource.Stop();
-        _isPlaying = false;
-        _writePos = 0;
+        Interlocked.Exchange(ref _flushRequested, 1);
+        while (_chunks.TryDequeue(out _)) { }
+        Interlocked.Exchange(ref _queuedSamples, 0);
+        _lastChunkTime = -100f;
     }
 
-    void Update()
+    private void OnAudioRead(float[] output)
     {
-        if (!_isPlaying) return;
+        if (Interlocked.Exchange(ref _flushRequested, 0) != 0)
+        {
+            _activeChunk = null;
+            _activeOffset = 0;
+            _primed = false;
+            _fadeInSample = 0;
+        }
 
-        // Detect when audio stream has ended (silence after playback)
-        float vol = GetCurrentVolume();
-        if (vol < SILENCE_THRESHOLD)
+        int prebufferSamples = serverSampleRate * prebufferMs / 1000;
+        if (!_primed && Volatile.Read(ref _queuedSamples) >= prebufferSamples)
         {
-            _silenceTimer += Time.deltaTime;
-            if (_silenceTimer > SILENCE_TIMEOUT)
+            _primed = true;
+            _fadeInSample = 0;
+        }
+
+        double sum = 0;
+        for (int i = 0; i < output.Length; i++)
+        {
+            float sample = 0f;
+            if (_primed && TryReadSample(out sample))
             {
-                StopPlayback();
+                int fadeSamples = Mathf.Max(1, serverSampleRate * deClickFadeMs / 1000);
+                if (_fadeInSample < fadeSamples)
+                {
+                    sample *= _fadeInSample / (float)fadeSamples;
+                    _fadeInSample++;
+                }
+                sum += sample * sample;
             }
+            else if (_primed)
+                _primed = false;
+            output[i] = sample;
         }
-        else
+        Volatile.Write(ref _currentRms, Mathf.Sqrt((float)(sum / output.Length)));
+    }
+
+    private bool TryReadSample(out float sample)
+    {
+        while (_activeChunk == null || _activeOffset >= _activeChunk.Length)
         {
-            _silenceTimer = 0f;
+            if (!_chunks.TryDequeue(out _activeChunk))
+            {
+                sample = 0f;
+                return false;
+            }
+            _activeOffset = 0;
         }
+
+        sample = _activeChunk[_activeOffset++];
+        Interlocked.Decrement(ref _queuedSamples);
+        return true;
     }
 }

@@ -4,7 +4,7 @@ Complete guide to setting up the Unity project and deploying to Meta Quest 3.
 
 ## Prerequisites
 
-- Unity 2022.3 LTS (or later 2022.3.x patch)
+- Unity 6.5 (6000.5.4f1) with Android Build Support, OpenJDK, and Android SDK/NDK tools
 - Meta Quest 3, 3S, or Pro headset
 - USB-C cable for sideloading (or Wi-Fi deploy via Meta Quest Developer Hub)
 - [Meta Quest Developer account](https://developer.oculus.com/)
@@ -14,7 +14,7 @@ Complete guide to setting up the Unity project and deploying to Meta Quest 3.
 
 1. Open Unity Hub
 2. Click **New Project**
-3. Select **Unity 2022.3 LTS**
+3. Select **Unity 6.5 (6000.5.4f1)**
 4. Template: **3D (URP)**
 5. Name: `ConversationalAvatarVR`
 6. Create the project
@@ -60,6 +60,11 @@ https://github.com/endel/NativeWebSocket.git#upm
 ### uLipSync
 Download from [GitHub releases](https://github.com/hecomi/uLipSync/releases) and import the `.unitypackage` into your project.
 
+For the included Avaturn head, map `A/I/U/E/O/N/-` to
+`viseme_aa/viseme_I/viseme_U/viseme_E/viseme_O/viseme_nn/viseme_sil`.
+Attach uLipSync to the same `AudioSource` used by `AudioStreamPlayer`, then
+disable `AvatarController.driveMouthFromVolume`.
+
 ## Step 5: Configure XR
 
 1. **Edit → Project Settings → XR Plug-in Management**
@@ -75,12 +80,19 @@ Copy all `.cs` files from `unity-client/Assets/Scripts/` into your Unity project
 - `AudioStreamPlayer.cs`
 - `AvatarController.cs`
 - `ConversationManager.cs`
+- `CharacterPlatformClient.cs`
 
 ## Step 7: Import Avatar
 
 Options for 3D avatars:
 
-### Ready Player Me (Recommended for Quick Start)
+### Avaturn (included avatar)
+1. Follow the [Avaturn Unity import guide](https://docs.avaturn.me/docs/importing/unity/).
+2. Import `Avatar.glb` with glTFast and place the generated avatar in the scene.
+3. Select the avatar root and run **Conversational AI → Configure Selected Avaturn Avatar**.
+4. The included GLB already has a humanoid skin, ARKit expressions, blinks, jaw controls, and all Oculus visemes.
+
+### Ready Player Me
 1. Go to [readyplayer.me](https://readyplayer.me)
 2. Create an avatar
 3. Download as GLB
@@ -158,9 +170,10 @@ On the **ConversationalAvatar**:
 ## Step 11: Build for Quest 3
 
 1. Find your PC's IP: run `python tools/find_my_ip.py`
-2. Open Windows Firewall for port 8765:
+2. Open Windows Firewall for conversation port 8765 and character-control port 8766:
    ```
    netsh advfirewall firewall add rule name="AI Avatar" dir=in action=allow protocol=tcp localport=8765
+   netsh advfirewall firewall add rule name="AI Character Control" dir=in action=allow protocol=tcp localport=8766
    ```
 3. In Unity: change `Server Address` to your PC's IP (e.g., `192.168.1.100`)
 4. **File → Build Settings → Android**
