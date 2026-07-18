@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Character Control · Conversational AI</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b0b0c; --panel:#171719; --line:#363638; --text:#f5f5f5; --muted:#a2a2a5; --accent:#ff5a00; --accent2:#ff8a4c; --graphite:#747579; --danger:#ff7285; }
+    * { box-sizing:border-box } body { margin:0; background:radial-gradient(circle at 80% -10%,#18334c 0,transparent 36%),var(--bg); color:var(--text); font:14px/1.5 Inter,Segoe UI,sans-serif; }
+    button,input,textarea,select { font:inherit } button { cursor:pointer }
+    header { height:82px; display:flex; align-items:center; justify-content:space-between; padding:0 28px; border-bottom:3px solid var(--accent); background:#090909ee; backdrop-filter:blur(12px); position:sticky; top:0; z-index:5; }
+    .brand { display:flex;align-items:center;gap:18px }.brand img { width:190px;height:auto;display:block }.brand-copy { border-left:1px solid #444;padding-left:18px }.brand-copy strong { display:block;font-size:16px }.brand-copy span { color:var(--muted);font-size:12px }
+    .status { display:flex; align-items:center; gap:10px; color:var(--muted) } .dot { width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent) }
+    main { display:grid; grid-template-columns:280px minmax(480px,820px) minmax(280px,420px); gap:18px; padding:22px; max-width:1600px; margin:auto }
+    .panel { background:linear-gradient(180deg,#1b1b1d,#121213); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 18px 55px #0007 }
+    .panel-head { padding:18px 20px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center }
+    .panel-head h2 { margin:0; font-size:14px; text-transform:uppercase; letter-spacing:1.2px; color:#c4ccda }
+    .characters { padding:10px } .character { width:100%; border:1px solid transparent; background:transparent; color:var(--text); border-radius:11px; padding:12px; text-align:left; margin-bottom:5px; display:flex; gap:10px; align-items:center }
+    .character:hover { background:#242426 } .character.selected { background:#2a211c; border-color:#754024 } .avatar { width:36px;height:36px;border-radius:11px;background:linear-gradient(135deg,var(--accent),#ff9b61);color:#17100c;display:grid;place-items:center;font-weight:800 }
+    .character strong,.character small { display:block } .character small { color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:178px }
+    .active-pill { margin-left:auto; width:7px;height:7px;border-radius:50%;background:var(--accent) }
+    .body { padding:20px } .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px } .wide { grid-column:1/-1 }
+    label { color:var(--muted); font-size:12px; display:block; margin-bottom:6px } input,textarea,select { width:100%; border:1px solid #3b3b3e; background:#0d0d0e; color:var(--text); border-radius:9px; padding:10px 11px; outline:none } input:focus,textarea:focus,select:focus { border-color:var(--accent); box-shadow:0 0 0 3px #ff5a0026 } textarea { min-height:82px; resize:vertical }
+    .actions { display:flex; gap:9px; flex-wrap:wrap; padding-top:18px; margin-top:18px; border-top:1px solid var(--line) }
+    .btn { border:1px solid #49494c; background:#2a2a2d; color:var(--text); border-radius:9px; padding:9px 14px } .btn:hover { filter:brightness(1.15) } .primary { background:var(--accent); border-color:var(--accent); color:#160a03; font-weight:700 } .activate { background:#432416;border-color:#9a4a20 } .danger { color:var(--danger); border-color:#59313a;background:#29191e }
+    .metric { display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid #242b38 }.metric span{color:var(--muted)}
+    .cue-list { display:flex;flex-wrap:wrap;gap:6px;margin-top:12px }.cue { background:#202936;border:1px solid #334155;padding:4px 8px;border-radius:999px;color:#bec9d8;font-size:12px }
+    .file { display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #242b38 }.file small{color:var(--muted)}
+    .notice { color:var(--muted); font-size:12px; background:#10151d;border:1px solid #283140;border-radius:10px;padding:11px;margin-top:14px }
+    .choice-note { color:#c9d1dc; font-size:12px; background:#111820; border:1px solid #2d3a49; border-radius:10px; padding:11px; min-height:68px }
+    input[type=checkbox] { width:auto; margin-right:8px }
+    #toast { position:fixed;right:22px;bottom:22px;background:#18231f;border:1px solid #2b5b4d;color:#dffcf2;padding:12px 16px;border-radius:10px;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none } #toast.show{opacity:1;transform:none}
+    @media(max-width:1100px){main{grid-template-columns:240px 1fr}.right{grid-column:1/-1}} @media(max-width:720px){main{grid-template-columns:1fr;padding:12px}.grid{grid-template-columns:1fr}.wide{grid-column:auto}header{padding:0 16px}}
+  </style>
+</head>
+<body>
+<header><div class="brand"><img src="/assets/metropolia-logo.png" alt="Metropolia University of Applied Sciences"><div class="brand-copy"><strong>Conversational AI Platform</strong><span>Character & avatar control</span></div></div><div class="status"><i class="dot"></i><span id="serverStatus">Connecting…</span></div></header>
+<main>
+  <section class="panel">
+    <div class="panel-head"><h2>Characters</h2><button class="btn" id="newBtn">+ New</button></div>
+    <div class="characters" id="characters"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Identity & performance</h2><span id="activeLabel"></span></div>
+    <div class="body">
+      <div class="grid">
+        <div><label>Character id</label><input id="id" autocomplete="off"></div>
+        <div><label>Name</label><input id="name"></div>
+        <div class="wide"><label>Spoken output language</label><select id="language">
+          <option value="en">English</option><option value="fi">Finnish</option><option value="sv">Swedish</option><option value="de">German</option><option value="es">Spanish</option><option value="fr">French</option><option value="it">Italian</option><option value="pt">Portuguese</option><option value="nl">Dutch</option><option value="no">Norwegian</option><option value="da">Danish</option><option value="pl">Polish</option><option value="ru">Russian</option><option value="el">Greek</option><option value="tr">Turkish</option><option value="ar">Arabic</option><option value="he">Hebrew</option><option value="hi">Hindi</option><option value="ja">Japanese</option><option value="ko">Korean</option><option value="zh">Chinese</option><option value="ms">Malay</option><option value="sw">Swahili</option>
+        </select></div>
+        <div class="wide"><label>Short description / role</label><input id="description"></div>
+        <div class="wide"><label>Background story</label><textarea id="backstory"></textarea></div>
+        <div><label>Personality traits · one per line</label><textarea id="traits"></textarea></div>
+        <div><label>Goals · one per line</label><textarea id="goals"></textarea></div>
+        <div class="wide"><label>Speaking style</label><textarea id="speaking_style"></textarea></div>
+        <div class="wide"><label>Boundaries · one per line</label><textarea id="boundaries"></textarea></div>
+        <div class="wide"><label>Unity avatar asset / addressable id</label><input id="avatar_asset" placeholder="Assets/Characters/Alex.prefab"></div>
+        <div class="wide"><label>Unity Animator state mappings</label><div class="notice">Names must match states in the avatar's Animator Controller. Unity crossfades safely and falls back to the existing speaking/listening booleans when a state is absent.</div></div>
+        <div><label>Idle state</label><input id="animation_idle" placeholder="Idle"></div>
+        <div><label>Listening state</label><input id="animation_listening" placeholder="Listening"></div>
+        <div><label>Thinking state</label><input id="animation_thinking" placeholder="Thinking"></div>
+        <div><label>Remembering state</label><input id="animation_remembering" placeholder="Remembering"></div>
+        <div><label>Searching state</label><input id="animation_searching" placeholder="Searching"></div>
+        <div><label>Speaking state</label><input id="animation_speaking" placeholder="Talking"></div>
+        <div><label>Walking state</label><input id="animation_walking" placeholder="Walking"></div>
+        <div><label>Animation crossfade seconds</label><input id="animation_blend" type="number" min="0" max="1.5" step="0.02"></div>
+        <div><label>Social relationship</label><input id="relationship" placeholder="friend, rival, mentor, stranger"></div>
+        <div><label>Conversational initiative (0 passive, 1 proactive)</label><input id="initiative" type="number" min="0" max="1" step="0.05"></div>
+        <div class="wide"><label>Canon vs creative improvisation: <strong id="creativityValue">0.65</strong></label><input id="creativity" type="range" min="0" max="1" step="0.01"><div class="notice">0 stays strictly inside verified canon. 1 allows harmless invented memories, jokes, opinions, and social anecdotes while still respecting identity, facts, and boundaries.</div></div>
+        <div class="wide"><label>Talkativeness: <strong id="talkativenessValue">0.55</strong></label><input id="talkativeness" type="range" min="0" max="1" step="0.01"><div class="notice">0 gives brief replies. 1 develops thoughts, opinions, examples, and conversational threads before handing the turn back.</div></div>
+        <div class="wide"><label>Follow-up tendency: <strong id="followUpValue">0.45</strong></label><input id="follow_up_frequency" type="range" min="0" max="1" step="0.01"><div class="notice">Controls how often the character ends with a specific open question that keeps the current topic alive.</div></div>
+        <div><label>Natural turn length (minimum sentences)</label><input id="min_sentences" type="number" min="1" max="6" step="1"></div>
+        <div><label>Natural turn length (maximum sentences)</label><input id="max_sentences" type="number" min="1" max="6" step="1"></div>
+        <div class="wide"><label><input id="instant_backchannel" type="checkbox">Use an instant same-voice thinking phrase while the answer renders</label></div>
+        <div class="wide"><label><input id="greet_on_connect" type="checkbox">Speak first when Unity connects</label></div>
+        <div class="wide"><label>How this character opens and creates conversation</label><textarea id="opening_direction" placeholder="Make an observant sarcastic comment, then invite a real reaction."></textarea></div>
+        <div class="wide"><label>Fast opening lines · one per line, rotated on connection</label><textarea id="opening_lines" placeholder="Seriously, you took your time.&#10;I was starting to get bored."></textarea></div>
+        <div class="wide"><label>Performance preset</label><select id="performance_preset"></select></div>
+        <div><label>Brain model</label><select id="brain_engine"></select></div>
+        <div><label>Voice model</label><select id="voice_engine"></select></div>
+        <div class="wide choice-note" id="runtimeNote">Loading local model profiles...</div>
+        <div><label>Voice library</label><select id="voicePreset"><option value="">Built-in voice</option></select></div>
+        <div><label>Voice temperature</label><input id="temperature" type="number" min="0.05" max="2" step="0.05"></div>
+        <div class="wide"><label>Orpheus built-in voice</label><select id="orpheus_voice"><option value="tara">Tara</option><option value="leah">Leah</option><option value="jess">Jess</option><option value="mia">Mia</option><option value="zoe">Zoe</option><option value="leo">Leo</option><option value="dan">Dan</option><option value="zac">Zac</option></select></div>
+        <div class="wide"><label>Chatterbox voice reference WAV · clean 6–10 seconds</label><input id="reference_audio" placeholder="./voices/alex.wav"></div>
+        <div class="wide"><label>Add a voice to the local library</label><input id="voiceInput" type="file" accept=".wav"><button class="btn" id="uploadVoiceBtn" style="margin-top:8px">Upload voice WAV</button></div>
+        <div><label>Default emotion intensity</label><input id="emotion_intensity" type="number" min="0" max="1" step="0.05"></div>
+      </div>
+      <div class="actions"><button class="btn primary" id="saveBtn">Save character</button><button class="btn activate" id="activateBtn">Activate</button><button class="btn danger" id="deleteBtn">Delete</button></div>
+    </div>
+  </section>
+
+  <section class="panel right">
+    <div class="panel-head"><h2>Runtime & knowledge</h2></div>
+    <div class="body">
+      <div class="metric"><span>Active character</span><strong id="runtimeCharacter">—</strong></div>
+      <div class="metric"><span>Speech backend</span><strong id="runtimeTts">—</strong></div>
+      <div class="metric"><span>Brain</span><strong id="runtimeBrain">--</strong></div>
+      <div class="metric"><span>Knowledge chunks</span><strong id="runtimeChunks">0</strong></div>
+      <div class="notice" id="restartNote">The active runtime matches this character.</div>
+      <label style="margin-top:18px">Character knowledge documents</label>
+      <input id="fileInput" type="file" accept=".txt,.md,.pdf,.docx" multiple>
+      <div class="actions"><button class="btn" id="uploadBtn">Upload files</button><button class="btn activate" id="reindexBtn">Reindex knowledge</button></div>
+      <div id="files"></div>
+      <div class="notice" id="cueNotice"></div>
+      <div class="cue-list" id="cueList"></div>
+      <div class="notice" id="languageNote"></div>
+      <div class="notice">Activating a character resets the current conversation memory so identity and backstory cannot leak between characters.</div>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+<script>
+const $=id=>document.getElementById(id); let selected=null, activeId=null, creating=false, modelCatalog=null;
+const fields=['id','name','language','description','backstory','speaking_style','avatar_asset'];
+const listFields=['traits','goals','boundaries'];
+function toast(message,bad=false){const el=$('toast');el.textContent=message;el.style.borderColor=bad?'#783b49':'#2b5b4d';el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
+async function api(url,options={}){const response=await fetch(url,options);if(!response.ok){let message=response.statusText;try{message=(await response.json()).detail||message}catch{}throw new Error(message)}if(response.status===204)return null;return response.json()}
+function initials(name){return (name||'?').split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()}
+function updateLanguageNote(){const en=$('language').value==='en',voice=$('voice_engine').value;let cues=[];if(voice==='chatterbox'){cues=['laugh','chuckle','sigh','gasp','groan','cough','sniff','shush','clear throat'];$('cueNotice').textContent=en?'Native Chatterbox Turbo performance cues:':'Multilingual Chatterbox uses acoustic emotion; unsupported cue tags are removed.';$('languageNote').textContent=en?'English uses low-latency Chatterbox Turbo with native performance cues.':'This language uses Chatterbox Multilingual; the first switch warms the model.'}else if(voice==='orpheus-cpp'||voice==='orpheus-vllm'){cues=['laugh','chuckle','sigh','gasp','groan','yawn','cough','sniffle'];$('cueNotice').textContent='Native Orpheus performance cues:';$('languageNote').textContent='Orpheus accepts its documented emotion tokens and removes other stage directions.'}else if(voice==='pocket'){$('cueNotice').textContent='Pocket has no native performance-cue tokens; action labels are removed instead of spoken.';$('languageNote').textContent=en?'Pocket streams speech from CPU and leaves the GPU free for the brain. Choose Chatterbox or Orpheus when controlled laughs and sighs matter more than minimum latency.':'Pocket language models are chosen when its worker starts; restart after changing language families.'}else{$('cueNotice').textContent='This voice has no native non-verbal performance cues; stage directions are removed.';$('languageNote').textContent=`The selected ${voice||'voice'} engine has its own language and voice availability.`}$('cueList').innerHTML=cues.map(cue=>`<span class="cue">${cue}</span>`).join('')}
+async function loadCatalog(){modelCatalog=await api('/api/model-presets');const fill=(id,items)=>{$(id).innerHTML=Object.entries(items).map(([key,x])=>`<option value="${key}">${x.label}</option>`).join('')};fill('performance_preset',modelCatalog.presets);fill('brain_engine',modelCatalog.brains);fill('voice_engine',modelCatalog.voices)}
+function updateRuntimeNote(){if(!modelCatalog)return;const p=modelCatalog.presets[$('performance_preset').value],b=modelCatalog.brains[$('brain_engine').value],v=modelCatalog.voices[$('voice_engine').value];$('runtimeNote').innerHTML=`<strong>${p?.label||'Custom combination'}</strong><br>${p?.summary||''}<br><span style="color:#9aa7b7">Expected: ${p?.expected_turn||'Benchmark this combination'} Â· ${p?.hardware||''}</span><br><br><strong>${b?.label||''}</strong>: ${b?.summary||''}<br><strong>${v?.label||''}</strong>: ${v?.summary||''}`;updateLanguageNote()}
+function applyPreset(){if(!modelCatalog)return;const p=modelCatalog.presets[$('performance_preset').value];if(p){$('brain_engine').value=p.brain;$('voice_engine').value=p.voice}updateRuntimeNote()}
+async function refreshVoices(){const data=await api('/api/voices');const select=$('voicePreset');const current=$('reference_audio').value;select.innerHTML='<option value="">Built-in voice</option>'+data.voices.map(v=>`<option value="${v.path}">${v.name} · ${v.duration_seconds}s</option>`).join('');select.value=data.voices.some(v=>v.path===current)?current:''}
+async function refresh(){const data=await api('/api/characters');activeId=data.active_id;const box=$('characters');box.innerHTML='';data.characters.forEach(c=>{const b=document.createElement('button');b.className='character'+(selected&&selected.id===c.id?' selected':'');b.innerHTML=`<span class="avatar">${initials(c.name)}</span><span><strong>${c.name}</strong><small>${c.description||c.id}</small></span>${c.id===activeId?'<i class="active-pill"></i>':''}`;b.onclick=()=>select(c);box.appendChild(b)});if(!selected&&!creating&&data.characters.length)select(data.characters.find(c=>c.id===activeId)||data.characters[0]);await refreshStatus()}
+function select(c){selected=structuredClone(c);creating=false;fields.forEach(k=>$(k).value=selected[k]||'');$('language').value=selected.language||'en';listFields.forEach(k=>$(k).value=(selected[k]||[]).join('\n'));for(const state of ['idle','listening','thinking','remembering','searching','speaking','walking'])$(`animation_${state}`).value=selected.animations?.[state]||state[0].toUpperCase()+state.slice(1);$('animation_blend').value=selected.animations?.blend_seconds??.22;$('relationship').value=selected.conversation?.relationship||'friend';$('initiative').value=selected.conversation?.initiative??.8;$('creativity').value=selected.conversation?.creativity??.65;$('creativityValue').textContent=Number($('creativity').value).toFixed(2);$('talkativeness').value=selected.conversation?.talkativeness??.55;$('talkativenessValue').textContent=Number($('talkativeness').value).toFixed(2);$('follow_up_frequency').value=selected.conversation?.follow_up_frequency??.45;$('followUpValue').textContent=Number($('follow_up_frequency').value).toFixed(2);$('min_sentences').value=selected.conversation?.min_sentences??1;$('max_sentences').value=selected.conversation?.max_sentences??3;$('instant_backchannel').checked=selected.conversation?.instant_backchannel===true;$('greet_on_connect').checked=selected.conversation?.greet_on_connect!==false;$('opening_direction').value=selected.conversation?.opening_direction||'';$('opening_lines').value=(selected.conversation?.opening_lines||[]).join('\n');$('performance_preset').value=selected.runtime?.preset||modelCatalog.default.preset;$('brain_engine').value=selected.runtime?.brain||modelCatalog.default.brain;$('voice_engine').value=selected.runtime?.voice||modelCatalog.default.voice;$('reference_audio').value=selected.voice?.reference_audio||'';$('orpheus_voice').value=selected.voice?.orpheus_voice||'tara';$('temperature').value=selected.voice?.temperature??.8;$('emotion_intensity').value=selected.voice?.emotion_intensity??.65;$('id').disabled=true;$('activeLabel').textContent=c.id===activeId?'ACTIVE':'';updateRuntimeNote();refreshVoices();refreshKnowledge();refresh()}
+function payload(){const p={};fields.forEach(k=>p[k]=$(k).value.trim());listFields.forEach(k=>p[k]=$(k).value.split('\n').map(x=>x.trim()).filter(Boolean));p.animations={};for(const state of ['idle','listening','thinking','remembering','searching','speaking','walking'])p.animations[state]=$(`animation_${state}`).value.trim();p.animations.blend_seconds=Number($('animation_blend').value||.22);p.conversation={relationship:$('relationship').value.trim()||'friend',initiative:Number($('initiative').value||.8),creativity:Number($('creativity').value||.65),talkativeness:Number($('talkativeness').value||.55),follow_up_frequency:Number($('follow_up_frequency').value||.45),min_sentences:Number($('min_sentences').value||1),max_sentences:Number($('max_sentences').value||3),instant_backchannel:$('instant_backchannel').checked,greet_on_connect:$('greet_on_connect').checked,opening_direction:$('opening_direction').value.trim(),opening_lines:$('opening_lines').value.split('\n').map(x=>x.trim()).filter(Boolean)};p.runtime={preset:$('performance_preset').value,brain:$('brain_engine').value,voice:$('voice_engine').value};p.voice={...(selected?.voice||{}),reference_audio:$('reference_audio').value.trim(),orpheus_voice:$('orpheus_voice').value,temperature:Number($('temperature').value||.8),emotion_intensity:Number($('emotion_intensity').value||.65)};p.knowledge=selected?.knowledge;return p}
+$('newBtn').onclick=()=>{creating=true;selected=null;fields.forEach(k=>$(k).value='');$('language').value='en';listFields.forEach(k=>$(k).value='');for(const state of ['idle','listening','thinking','remembering','searching','speaking','walking'])$(`animation_${state}`).value=state==='speaking'?'Talking':state[0].toUpperCase()+state.slice(1);$('animation_blend').value=.22;$('relationship').value='friend';$('initiative').value=.8;$('creativity').value=.65;$('creativityValue').textContent='0.65';$('talkativeness').value=.55;$('talkativenessValue').textContent='0.55';$('follow_up_frequency').value=.45;$('followUpValue').textContent='0.45';$('min_sentences').value=1;$('max_sentences').value=3;$('instant_backchannel').checked=false;$('greet_on_connect').checked=true;$('opening_direction').value='Open casually in character and give the other person something interesting to respond to.';$('opening_lines').value='Well, you took your time.';$('performance_preset').value='instant-streaming';applyPreset();$('orpheus_voice').value='tara';$('temperature').value=.8;$('emotion_intensity').value=.65;$('id').disabled=false;$('activeLabel').textContent='NEW';$('files').innerHTML='';updateLanguageNote()};
+$('language').onchange=updateLanguageNote;
+$('performance_preset').onchange=applyPreset;
+$('brain_engine').onchange=updateRuntimeNote;
+$('voice_engine').onchange=updateRuntimeNote;
+$('creativity').oninput=()=>{$('creativityValue').textContent=Number($('creativity').value).toFixed(2)};
+$('talkativeness').oninput=()=>{$('talkativenessValue').textContent=Number($('talkativeness').value).toFixed(2)};
+$('follow_up_frequency').oninput=()=>{$('followUpValue').textContent=Number($('follow_up_frequency').value).toFixed(2)};
+$('voicePreset').onchange=()=>{$('reference_audio').value=$('voicePreset').value};
+$('uploadVoiceBtn').onclick=async()=>{const file=$('voiceInput').files[0];if(!file)return toast('Choose a WAV file first',true);try{const voice=await api(`/api/voices/${encodeURIComponent(file.name)}`,{method:'PUT',body:await file.arrayBuffer()});$('reference_audio').value=voice.path;await refreshVoices();$('voicePreset').value=voice.path;toast('Voice added to local library')}catch(e){toast(e.message,true)}};
+$('saveBtn').onclick=async()=>{try{const p=payload();selected=creating?await api('/api/characters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}):await api(`/api/characters/${selected.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});creating=false;$('id').disabled=true;$('activeLabel').textContent=selected.id===activeId?'ACTIVE':'SAVED';toast('Character saved');await refresh()}catch(e){toast(e.message,true)}};
+$('activateBtn').onclick=async()=>{if(!selected)return;try{await api(`/api/characters/${selected.id}/activate`,{method:'POST'});toast(`${selected.name} activated`);await refresh()}catch(e){toast(e.message,true)}};
+$('deleteBtn').onclick=async()=>{if(!selected||!confirm(`Delete ${selected.name}?`))return;try{await api(`/api/characters/${selected.id}`,{method:'DELETE'});selected=null;toast('Character deleted');await refresh()}catch(e){toast(e.message,true)}};
+async function refreshStatus(){try{const s=await api('/api/status');$('serverStatus').textContent='Local server online';$('runtimeCharacter').textContent=s.active_character_name;$('runtimeTts').textContent=s.tts_backend;$('runtimeBrain').textContent=s.runtime?.brain||s.llm_model||'--';$('runtimeChunks').textContent=s.knowledge_chunks;$('restartNote').textContent=s.restart_required?'This character requests different brain or voice engines. Restart the server to load them.':'The running brain and voice match the active character.';$('restartNote').style.borderColor=s.restart_required?'#9a4a20':'#283140'}catch{$('serverStatus').textContent='Server unavailable'}}
+async function refreshKnowledge(){if(!selected)return;try{const k=await api(`/api/characters/${selected.id}/knowledge`);$('files').innerHTML=k.files.map(f=>`<div class="file"><span>${f.name}<small> · ${Math.max(1,Math.round(f.bytes/1024))} KB</small></span><button class="btn danger" data-file="${encodeURIComponent(f.name)}">Remove</button></div>`).join('')||'<div class="notice">No documents yet.</div>';$('files').querySelectorAll('[data-file]').forEach(b=>b.onclick=async()=>{await api(`/api/characters/${selected.id}/knowledge/files/${b.dataset.file}`,{method:'DELETE'});refreshKnowledge()})}catch(e){toast(e.message,true)}}
+$('uploadBtn').onclick=async()=>{if(!selected)return;try{for(const file of $('fileInput').files)await api(`/api/characters/${selected.id}/knowledge/files/${encodeURIComponent(file.name)}`,{method:'PUT',body:await file.arrayBuffer()});toast('Files uploaded');await refreshKnowledge()}catch(e){toast(e.message,true)}};
+$('reindexBtn').onclick=async()=>{if(!selected)return;try{const r=await api(`/api/characters/${selected.id}/knowledge/reindex`,{method:'POST'});toast(`Indexed ${r.chunks} chunks`);await refreshStatus();await refreshKnowledge()}catch(e){toast(e.message,true)}};
+loadCatalog().then(refresh).catch(e=>toast(e.message,true)); setInterval(refreshStatus,4000);
+</script>
+</body>
+</html>

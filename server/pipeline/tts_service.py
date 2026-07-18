@@ -24,11 +24,14 @@ import torch
 from pipecat.frames.frames import (
     Frame,
     ErrorFrame,
+    OutputTransportMessageUrgentFrame,
     TTSAudioRawFrame,
     TTSStartedFrame,
     TTSStoppedFrame,
 )
 from pipecat.services.tts_service import TTSService
+
+from pipeline.speech_text import expression_message, prepare_for_orpheus
 
 logger = logging.getLogger(__name__)
 
@@ -223,10 +226,16 @@ class OrpheusTTSService(TTSService):
         Orpheus_Distributed_FastAPI implementation, which handles the case
         where vllm splits special token text across multiple stream chunks.
         """
-        if not text or not text.strip():
+        prepared = prepare_for_orpheus(text or "")
+        if not prepared.speakable:
             return
 
+        text = prepared.text
+
         logger.info("TTS [%s]: voice=%s text='%s'", context_id, self._voice, text[:80])
+        cue = expression_message(prepared)
+        if cue:
+            yield OutputTransportMessageUrgentFrame(message=cue)
         yield TTSStartedFrame()
 
         loop = asyncio.get_event_loop()
