@@ -12,7 +12,9 @@ server/.env
 # Models and caches (downloaded at runtime)
 models/
 server/knowledge/db/
-server/knowledge/characters/
+# Keep each character's source documents in Git. Chroma indexes are generated
+# locally from those documents and should not be committed.
+server/knowledge/characters/*/db/
 *.bin
 *.safetensors
 *.gguf

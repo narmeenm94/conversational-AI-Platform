@@ -40,6 +40,11 @@ The Quest 3 headset is a thin client — it only captures your voice, renders th
 
 ## Quick Start
 
+For a clean clone on another Windows PC, follow the complete
+[Fresh PC Setup Guide](docs/fresh_pc_setup.md). It identifies the few generated
+items that are downloaded or rebuilt locally and keeps the tested project
+configuration intact.
+
 ### 1. Prerequisites
 
 - Python 3.11
@@ -62,7 +67,7 @@ Windows:
 
 ```powershell
 cd server
-.\setup_local.ps1
+.\setup_local.ps1 -Tts pocket
 # Fast neutral fallback: .\setup_local.ps1 -Tts kokoro
 .\start_local.ps1
 ```
@@ -194,6 +199,7 @@ docs/                       Documentation
 
 ## Documentation
 
+- [Fresh PC Setup Guide](docs/fresh_pc_setup.md)
 - [Quest 3 Setup Guide](docs/quest3_setup.md)
 - [Knowledge Base Guide](docs/knowledge_base_guide.md)
 - [Voice Customization](docs/voice_customization.md)

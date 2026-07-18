@@ -1,6 +1,6 @@
 param(
-    [ValidateSet("kokoro", "chatterbox")]
-    [string]$Tts = "chatterbox"
+    [ValidateSet("pocket", "kokoro", "chatterbox")]
+    [string]$Tts = "pocket"
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,7 +34,7 @@ if (Test-Path $venvPython) {
 if ($Tts -eq "kokoro") {
     & $venvPython -m pip install kokoro soundfile
     & $venvPython -m spacy download en_core_web_sm
-} else {
+} elseif ($Tts -eq "chatterbox") {
     & $venvPython -m pip install chatterbox-tts
     # PyPI's default torch wheel is CPU-only on Windows. Restore the matching
     # CUDA build after Chatterbox's pinned dependencies so Turbo uses NVIDIA.
@@ -57,13 +57,20 @@ if (-not (Test-Path $moonshinePython)) {
 & $moonshinePython -m pip install --upgrade pip
 & $moonshinePython -m pip install moonshine-voice==0.0.69 fastapi uvicorn
 
+# Pocket TTS is the current low-latency production voice. Keep it isolated so
+# its dependencies cannot disturb the main pipeline environment.
+$pocketPython = Join-Path $ServerDir ".venv-pocket\Scripts\python.exe"
+if (-not (Test-Path $pocketPython)) {
+    & $venvPython -m venv ".venv-pocket"
+}
+& $pocketPython -m pip install --upgrade pip
+& $pocketPython -m pip install pocket-tts==2.1.0 fastapi uvicorn
+
 if (-not (Test-Path ".env")) {
     Copy-Item ".env.local.example" ".env"
-    if ($Tts -eq "chatterbox") {
-        $envContents = Get-Content ".env"
-        $envContents -replace '^TTS_BACKEND=kokoro$', 'TTS_BACKEND=chatterbox' |
-            Set-Content ".env" -Encoding utf8
-    }
+    $envContents = Get-Content ".env"
+    $envContents -replace '^TTS_BACKEND=.*$', "TTS_BACKEND=$Tts" |
+        Set-Content ".env" -Encoding utf8
 }
 
 if (Get-Command ollama -ErrorAction SilentlyContinue) {
